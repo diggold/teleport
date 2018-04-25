@@ -69,9 +69,10 @@ func (s *AuthSuite) SetUpTest(c *C) {
 	})
 	c.Assert(err, IsNil)
 	authConfig := &InitConfig{
-		ClusterName: clusterName,
-		Backend:     s.bk,
-		Authority:   authority.New(),
+		ClusterName:            clusterName,
+		Backend:                s.bk,
+		Authority:              authority.New(),
+		SkipPeriodicOperations: true,
 	}
 	s.a, err = NewAuthServer(authConfig)
 	c.Assert(err, IsNil)
@@ -148,7 +149,7 @@ func (s *AuthSuite) TestUserLock(c *C) {
 	c.Assert(ws, NotNil)
 
 	fakeClock := clockwork.NewFakeClock()
-	s.a.clock = fakeClock
+	s.a.SetClock(fakeClock)
 
 	for i := 0; i <= defaults.MaxLoginAttempts; i++ {
 		_, err = s.a.SignIn(user, []byte("wrong pass"))
@@ -250,7 +251,7 @@ func (s *AuthSuite) TestTokensCRUD(c *C) {
 	c.Assert(err, IsNil)
 
 	// try to use after TTL:
-	s.a.clock = clockwork.NewFakeClockAt(time.Now().UTC().Add(time.Hour + 1))
+	s.a.SetClock(clockwork.NewFakeClockAt(time.Now().UTC().Add(time.Hour + 1)))
 	_, err = s.a.RegisterUsingToken(RegisterUsingTokenRequest{
 		Token:    multiUseToken,
 		HostID:   "late.bird",
@@ -551,9 +552,10 @@ func (s *AuthSuite) TestUpdateConfig(c *C) {
 	c.Assert(err, IsNil)
 	// use same backend but start a new auth server with different config.
 	authConfig := &InitConfig{
-		ClusterName: clusterName,
-		Backend:     s.bk,
-		Authority:   authority.New(),
+		ClusterName:            clusterName,
+		Backend:                s.bk,
+		Authority:              authority.New(),
+		SkipPeriodicOperations: true,
 	}
 	authServer, err := NewAuthServer(authConfig)
 	c.Assert(err, IsNil)

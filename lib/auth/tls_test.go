@@ -172,7 +172,44 @@ func (s *TLSSuite) TestRemoteRotation(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// old proxy client is still trusted
-	_, err = remoteProxy.GetNodes(defaults.Namespace)
+	_, err = s.server.CloneClient(remoteProxy).GetNodes(defaults.Namespace)
+	c.Assert(err, check.IsNil)
+}
+
+// TestLocalProxyPermissions tests new local proxy permissions
+// as it's now allowed to update host cert authorities of remote clusters
+func (s *TLSSuite) TestLocalProxyPermissions(c *check.C) {
+	remoteServer, err := NewTestAuthServer(TestAuthServerConfig{
+		Dir:         c.MkDir(),
+		ClusterName: "remote",
+	})
+	c.Assert(err, check.IsNil)
+
+	// after trust is established, things are good
+	err = s.server.AuthServer.Trust(remoteServer, nil)
+	c.Assert(err, check.IsNil)
+
+	ca, err := s.server.Auth().GetCertAuthority(services.CertAuthID{
+		DomainName: s.server.ClusterName(),
+		Type:       services.HostCA,
+	}, false)
+	c.Assert(err, check.IsNil)
+
+	proxy, err := s.server.NewClient(TestBuiltin(teleport.RoleProxy))
+	c.Assert(err, check.IsNil)
+
+	// local proxy can't update local cert authorities
+	err = proxy.UpsertCertAuthority(ca)
+	fixtures.ExpectAccessDenied(c, err)
+
+	// local proxy is allowed to update host CA of remote cert authorities
+	remoteCA, err := s.server.Auth().GetCertAuthority(services.CertAuthID{
+		DomainName: remoteServer.ClusterName,
+		Type:       services.HostCA,
+	}, false)
+	c.Assert(err, check.IsNil)
+
+	err = proxy.UpsertCertAuthority(remoteCA)
 	c.Assert(err, check.IsNil)
 }
 
@@ -181,7 +218,7 @@ func (s *TLSSuite) TestAutoRotation(c *check.C) {
 	clock := clockwork.NewFakeClockAt(time.Now())
 	s.server.Auth().SetClock(clock)
 
-	// create proxy client just for test purposes
+	// create proxy client
 	proxy, err := s.server.NewClient(TestBuiltin(teleport.RoleProxy))
 	c.Assert(err, check.IsNil)
 
